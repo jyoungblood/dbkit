@@ -59,7 +59,7 @@ $space_objects = db::find("", "SELECT title, classification FROM celestial_bodie
   'raw' => true
 ]);
 ```
-\* NOTE: Be careful when writing raw queries, as none of the parameters are sanitized. It's recommended to use this with the [db::where_placeholders()](#dbwhere_placeholderscriteria) function.
+\* NOTE: Be careful when writing raw queries, as none of these parameters are sanitized.
 
 
 ### db::update($table, $input, $criteria)
@@ -80,14 +80,19 @@ db::delete("celestial_bodies", "name='venice'");
 ### db::where_placeholders($criteria)
 Creates placeholders and sanitizes data for query building. This function is used to sanitize parameters for all functions.
 
-Example usage with a raw [db::find()](#dbfindtablecriteriaoptions) query:
+It returns an array with a string of generated placeholders (`where`), and an array of the actual data to be used in the query (`data`).
+
+An example of how it is used to prepare and execute a `db::find()` query:
 ```php
-$wd = db::db_where_placeholders("id='".$_POST['id']."'");
-
-$space_objects = db::find("", "SELECT title, classification FROM celestial_bodies WHERE " . $wd['where'], [
-  'raw' => true
-]);
+$wd = db::db_where_placeholders($where);
+try {
+  $query = "SELECT * FROM $table WHERE " . $wd['where'];
+  $a = $GLOBALS['database']->prepare($query);
+  $a->execute($wd['data']);
+  $a->setFetchMode(PDO::FETCH_ASSOC);
+}
+catch(PDOException $e) {
+  echo $e->getMessage();
+}
 ```
-
-
 
