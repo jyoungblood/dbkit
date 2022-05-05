@@ -75,6 +75,14 @@ class db {
     return $qr;
   }
 
+  public static function get($table, $where, $args = false){
+    return db::find($table, $where, $args);
+  }
+
+  public static function fetch($table, $where, $args = false){
+    return db::find($table, $where, $args);
+  }
+
   // sanitize parameters and insert array of data into mysql, returning the id of the record created
   public static function insert($table, $input){
     $columns = '';

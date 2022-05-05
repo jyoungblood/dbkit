@@ -51,13 +51,15 @@ foreach ($planets['data'] as $p){
 
 echo $planets['total'];  // 8
 ```
-You can also run a raw query by sending the `raw` parameter like this:
+`db::get()` and `db::fetch()` are also available as aliases to `db::find()`, and behave the exact same way.
+
+Raw SQL queries can be used by sending a `raw` parameter like this:
 ```php
 $space_objects = db::find("", "SELECT title, classification FROM celestial_bodies WHERE id IS NOT NULL", [
   'raw' => true
 ]);
 ```
-\* NOTE: Be careful writing raw queries, as none of the parameters are sanitized. It's recommended to use this with the [db::where_placeholders()](#dbwhere_placeholderscriteria) function below.
+\* NOTE: Be careful when writing raw queries, as none of the parameters are sanitized. It's recommended to use this with the [db::where_placeholders()](#dbwhere_placeholderscriteria) function.
 
 
 ### db::update($table, $input, $criteria)
