@@ -6,7 +6,7 @@
 # Installation
 Easy install with composer:
 ```
-composer require hxgf/dbkit:0.1.0@dev
+composer require hxgf/dbkit
 ```
 ```php
 use DBkit\db;
