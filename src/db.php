@@ -23,7 +23,7 @@ class db {
 	}
 
 	// create db placeholders, sanitize data for query building
-	public static function db_where_placeholders($where){
+	public static function create_placeholders($where){
 		$d = preg_match_all('/\'([^\"]*?)\'/', $where, $o);
 		foreach ($o[0] as $ph){
 			$data[] = str_replace("'","",$ph);
@@ -38,7 +38,7 @@ class db {
   // sanitize parameters and retrieve data from mysql, returning array w/ total
   public static function find($table, $where, $args = false){
     $qr = false;
-    $wd = db::db_where_placeholders($where);
+    $wd = db::create_placeholders($where);
     try {
       $query = "SELECT * FROM $table WHERE " . $wd['where'];
       if ($args['raw']){
@@ -133,7 +133,7 @@ class db {
       }
       $i++;
     }
-    $wd = db::db_where_placeholders($where);
+    $wd = db::create_placeholders($where);
     foreach ($wd['data'] as $dw){
       $data[] = $dw;
     }
@@ -149,7 +149,7 @@ class db {
 
   // sanitize parameters and delete a given mysql record
   public static function delete($table, $where){
-    $wd = db::db_where_placeholders($where);
+    $wd = db::create_placeholders($where);
     try {
       $a = $GLOBALS['database']->prepare("DELETE FROM $table WHERE " . $wd['where']);
       $a->execute($wd['data']);

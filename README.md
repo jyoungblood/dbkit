@@ -80,14 +80,14 @@ Sanitizes parameters and deletes a specific record(/s).
 db::delete("celestial_bodies", "name='venice'");
 ```
 
-## db::where_placeholders($criteria)
+## db::create_placeholders($criteria)
 Creates placeholders and sanitizes data for query building. This function is used to sanitize parameters for all functions.
 
 It returns an array with a string of generated placeholders (`where`), and an array of the actual data to be used in the query (`data`).
 
 An example of how it is used to prepare and execute a `db::find()` query:
 ```php
-$wd = db::db_where_placeholders($where);
+$wd = db::create_placeholders($where);
 try {
   $query = "SELECT * FROM $table WHERE " . $wd['where'];
   $a = $GLOBALS['database']->prepare($query);
