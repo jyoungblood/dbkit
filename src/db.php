@@ -2,6 +2,8 @@
 
 namespace DBkit;
 
+use PDO;
+
 class db {
   
 	// connect to the database
@@ -13,7 +15,7 @@ class db {
 			  $dbh = new PDO($args['driver'].":host=".$args['host'].";dbname=".$args['name'], $args['user'], $args['password']);
 				$dbh->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 			}
-			catch(PDOException $e) {
+			catch(\PDOException $e) {
 		    echo $e->getMessage();
 			}
 		}
@@ -46,7 +48,7 @@ class db {
       $a->execute($wd['data']);
       $a->setFetchMode(PDO::FETCH_ASSOC);
     }
-    catch(PDOException $e) {
+    catch(\PDOException $e) {
       echo $e->getMessage();
     }
     if ($args['cache'] && function_exists("apc_store")){
@@ -107,7 +109,7 @@ class db {
       $a = $GLOBALS['database']->prepare("INSERT INTO $table ($columns) value ($placeholders)");
       $a->execute($data);
     }
-    catch(PDOException $e) {
+    catch(\PDOException $e) {
       echo $e->getMessage();
     }
     $o = $GLOBALS['database']->lastInsertId();
@@ -139,7 +141,7 @@ class db {
       $a = $GLOBALS['database']->prepare("UPDATE $table SET $query WHERE " . $wd['where']);
       $a->execute($data);
     }
-    catch(PDOException $e) {
+    catch(\PDOException $e) {
       echo $e->getMessage();
     }
     return true;
@@ -152,7 +154,7 @@ class db {
       $a = $GLOBALS['database']->prepare("DELETE FROM $table WHERE " . $wd['where']);
       $a->execute($wd['data']);
     }
-    catch(PDOException $e) {
+    catch(\PDOException $e) {
       echo $e->getMessage();
     }
     return true;
