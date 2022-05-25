@@ -62,7 +62,6 @@ $space_objects = db::find("", "SELECT title, classification FROM celestial_bodie
   'raw' => true
 ]);
 ```
-<sub>\* NOTE: Be careful when writing raw queries, as none of these parameters are sanitized.</sub>
 
 
 ## db::update($table, $input, $criteria)

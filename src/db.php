@@ -9,8 +9,8 @@ class db {
 	// connect to the database
 	public static function init($args){
 		$dbh = false;
-		if ($args['host']){
-      $args['driver'] = $args['driver'] ? $args['driver'] : 'mysql';
+		if (isset($args['host'])){
+      $args['driver'] = isset($args['driver']) ? $args['driver'] : 'mysql';
 			try {
 			  $dbh = new PDO($args['driver'].":host=".$args['host'].";dbname=".$args['name'], $args['user'], $args['password']);
 				$dbh->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -41,7 +41,7 @@ class db {
     $wd = db::create_placeholders($where);
     try {
       $query = "SELECT * FROM $table WHERE " . $wd['where'];
-      if ($args['raw']){
+      if (isset($args['raw'])){
         $query = $wd['where'];
       }
       $a = $GLOBALS['database']->prepare($query);
@@ -51,28 +51,17 @@ class db {
     catch(\PDOException $e) {
       echo $e->getMessage();
     }
-    if ($args['cache'] && function_exists("apc_store")){
-      $cache_key = base64_encode($table.$where);
-      if ($qr = apc_fetch($cache_key)){
-      }else{
-        $_args = $args;
-        $_args['cache'] = false;
-        $qr = db_find($table, $where, $_args);
-        $cache_length = 60;
-        if ($args['cache_length']){
-          $cache_length = $args['cache_length'];
-        }
-        apc_store($cache_key, $qr, $cache_length);
-      }
-    }else{
-      $i = 0;
-      while($ad = $a->fetch()){
-        $qr['data'][] = $ad;
-        $i++;
-      }
-      if ($i > 0){
-        $qr['total'] = $i;
-      }
+    $i = 0;
+    $qr = [
+      'data' => [],
+      'total' => 0
+    ];
+    while($ad = $a->fetch()){
+      $qr['data'][] = $ad;
+      $i++;
+    }
+    if ($i > 0){
+      $qr['total'] = $i;
     }
     return $qr;
   }
