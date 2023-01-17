@@ -13,7 +13,7 @@
 	"keywords": ["utilities", "abstraction", "database", "PDO", "mysql"],
 	"autoload": {
 		"psr-4": {
-			"DBkit\\": ["src/"]
+			"VPHP\\": ["src/"]
 		}
 	}
 }

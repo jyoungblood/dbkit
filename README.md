@@ -1,6 +1,6 @@
-# DB Kit
+# VPHP DB Kit
 
-### PHP functions to handle database connection and CRUD operations with PDO.
+### Vanilla PHP functions to handle database connection and CRUD operations with PDO.
 
 
 # Installation
@@ -9,7 +9,7 @@ Easy install with composer:
 composer require hxgf/dbkit
 ```
 ```php
-use DBkit\db;
+use VPHP\db;
 require __DIR__ . '/vendor/autoload.php';
 ```
 
@@ -18,13 +18,16 @@ require __DIR__ . '/vendor/autoload.php';
 Initializes the database connection. The output from this function should be assigned to a global 'database' variable.
 ```php
 $GLOBALS['database'] = db::init([
-  'driver' => 'mysql', // optional, defaults to 'mysql'
   'host' => 'localhost',
   'name' => 'database_name',
   'user' => 'username',
-  'password' => 'password'
+  'password' => 'password',
+  'driver' => 'mysql', // optional, defaults to 'mysql'
+  'port' => '3306', // optional, defaults to '3306'
+  'charset' => 'utf8mb4', // optional, defaults to 'utf8mb4'
 ]);
 ```
+
 
 ## db::insert($table, $input)
 Sanitizes parameters and inserts an array of data into a specific table. <br />
@@ -98,3 +101,20 @@ catch(PDOException $e) {
 }
 ```
 
+
+# Using PDO methods
+
+The `$GLOBALS['database']` variable is just an initialized PDO object, so it's possible to use any [native PDO methods](https://www.php.net/manual/en/class.pdo.php) if needed.
+
+For example:
+```php
+$GLOBALS['database']->exec('CREATE TABLE users (
+			id INT(255) NOT NULL AUTO_INCREMENT,
+			password VARCHAR(255) NULL DEFAULT NULL,
+			email VARCHAR(255) NULL DEFAULT NULL,
+			PRIMARY KEY (id)
+			) ENGINE=InnoDB CHARACTER SET utf8;');
+```
+```php
+$GLOBALS['database']->query('DESCRIBE users')->fetchAll(PDO::FETCH_ASSOC)
+```

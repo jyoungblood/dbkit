@@ -1,6 +1,14 @@
 <?php
 
-namespace DBkit;
+/**
+ * @package    DB Kit
+ * @version    1.2.0
+ * @author     Jonathan Youngblood <jy@hxgf.io>
+ * @license    https://github.com/hxgf/dbkit/blob/master/LICENSE.md (MIT License)
+ * @source     https://github.com/hxgf/dbkit
+ */
+
+namespace VPHP;
 
 use PDO;
 
@@ -11,8 +19,10 @@ class db {
 		$dbh = false;
 		if (isset($args['host'])){
       $args['driver'] = isset($args['driver']) ? $args['driver'] : 'mysql';
+      $args['port'] = isset($args['port']) ? $args['port'] : '3306';
+      $args['charset'] = isset($args['charset']) ? $args['charset'] : 'utf8mb4';
 			try {
-			  $dbh = new PDO($args['driver'].":host=".$args['host'].";dbname=".$args['name'], $args['user'], $args['password']);
+			  $dbh = new PDO($args['driver'].":host=".$args['host'].";dbname=".$args['name'].";port=".$args['port'].";charset=".$args['charset'], $args['user'], $args['password']);
 				$dbh->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 			}
 			catch(\PDOException $e) {
@@ -22,9 +32,10 @@ class db {
 		return $dbh;
 	}
 
-	// create db placeholders, sanitize data for query building
+	// create query placeholders, sanitize data for query building
 	public static function create_placeholders($where){
 		$d = preg_match_all('/\'([^\"]*?)\'/', $where, $o);
+    $data = [];
 		foreach ($o[0] as $ph){
 			$data[] = str_replace("'","",$ph);
 		}
@@ -80,6 +91,7 @@ class db {
     $placeholders = '';
     $total = count($input);
     $i = 1;
+    $data = [];
     foreach ($input as $key => $val){
       $columns .= $key;
       $placeholders .= ':' . $key;
@@ -110,6 +122,7 @@ class db {
     $query = '';
     $total = count($input);
     $i = 1;
+    $data = [];
     foreach ($input as $key => $val){
       $query .= $key . ' = ?';
       if ($val != NULL){
