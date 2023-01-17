@@ -1,4 +1,4 @@
-# VPHP DB Kit
+# VPHP - DB Kit
 
 ### Vanilla PHP functions to handle database connection and CRUD operations with PDO.
 
