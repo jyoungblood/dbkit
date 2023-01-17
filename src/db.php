@@ -1,7 +1,7 @@
 <?php
 
 /**
- * @package    DB Kit
+ * @package    VPHP - DB Kit
  * @version    1.2.0
  * @author     Jonathan Youngblood <jy@hxgf.io>
  * @license    https://github.com/hxgf/dbkit/blob/master/LICENSE.md (MIT License)
