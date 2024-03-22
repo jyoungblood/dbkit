@@ -4,8 +4,8 @@
  * @package    VPHP - DB Kit
  * @version    1.2.0
  * @author     Jonathan Youngblood <jy@hxgf.io>
- * @license    https://github.com/hxgf/dbkit/blob/master/LICENSE.md (MIT License)
- * @source     https://github.com/hxgf/dbkit
+ * @license    https://github.com/jyoungblood/dbkit/blob/master/LICENSE.md (MIT License)
+ * @source     https://github.com/jyoungblood/dbkit
  */
 
 namespace VPHP;

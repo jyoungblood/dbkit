@@ -1,6 +1,6 @@
 {
-	"name": "hxgf/dbkit",
-  "homepage": "https://github.com/hxgf/dbkit",
+	"name": "jyoungblood/dbkit",
+  "homepage": "https://github.com/jyoungblood/dbkit",
 	"description": "PHP functions to handle database connection and CRUD operations with PDO.",
 	"type": "library",
   "license": "MIT",

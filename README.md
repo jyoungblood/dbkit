@@ -6,7 +6,7 @@
 # Installation
 Easy install with composer:
 ```
-composer require hxgf/dbkit
+composer require jyoungblood/dbkit
 ```
 ```php
 use VPHP\db;
