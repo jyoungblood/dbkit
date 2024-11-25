@@ -1,4 +1,6 @@
-# VPHP - DB Kit
+[<img src="https://raw.githubusercontent.com/jyoungblood/vphp.dev/refs/heads/master/public/vphp-logo-100.png">](https://vphp.dev)
+
+# DB Kit
 
 ### Vanilla PHP functions to handle database connection and CRUD operations with PDO.
 
