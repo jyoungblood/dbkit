@@ -2,7 +2,7 @@
 
 /**
  * @package    VPHP - DB Kit
- * @version    1.2.0
+ * @version    2.0.0
  * @author     Jonathan Youngblood <jy@hxgf.io>
  * @license    https://github.com/jyoungblood/dbkit/blob/master/LICENSE.md (MIT License)
  * @source     https://github.com/jyoungblood/dbkit
@@ -11,157 +11,143 @@
 namespace VPHP;
 
 use PDO;
+use InvalidArgumentException;
+use LogicException;
 
 class db {
-  
-	// connect to the database
-	public static function init($args){
-		$dbh = false;
-		if (isset($args['host'])){
-      $args['driver'] = isset($args['driver']) ? $args['driver'] : 'mysql';
-      $args['port'] = isset($args['port']) ? $args['port'] : '3306';
-      $args['charset'] = isset($args['charset']) ? $args['charset'] : 'utf8mb4';
-			try {
-			  $dbh = new PDO($args['driver'].":host=".$args['host'].";dbname=".$args['name'].";port=".$args['port'].";charset=".$args['charset'], $args['user'], $args['password']);
-				$dbh->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-			}
-			catch(\PDOException $e) {
-		    echo $e->getMessage();
-			}
-		}
-		return $dbh;
-	}
 
-	// create query placeholders, sanitize data for query building
-	public static function create_placeholders($where){
-		$d = preg_match_all('/\'([^\"]*?)\'/', $where, $o);
-    $data = [];
-		foreach ($o[0] as $ph){
-			$data[] = str_replace("'","",$ph);
-		}
-		$o = array(
-			'where' => preg_replace('/\'([^\"]*?)\'/', '?', $where),
-			'data' => $data,
-		);
-		return $o;
-	}
-
-  // sanitize parameters and retrieve data from mysql, returning array w/ total
-  public static function find($table, $where, $args = false){
-    $qr = false;
-    $wd = db::create_placeholders($where);
-    try {
-      $query = "SELECT * FROM $table WHERE " . $wd['where'];
-      if (isset($args['raw'])){
-        $query = $wd['where'];
+  // Return a connection or throw. The application owns error reporting.
+  public static function init($args){
+    foreach (['host', 'name', 'user', 'password'] as $key){
+      if (!isset($args[$key])){
+        throw new InvalidArgumentException("Missing database setting: $key");
       }
-      $a = $GLOBALS['database']->prepare($query);
-      $a->execute($wd['data']);
-      $a->setFetchMode(PDO::FETCH_ASSOC);
     }
-    catch(\PDOException $e) {
-      echo $e->getMessage();
+    $driver = isset($args['driver']) ? $args['driver'] : 'mysql';
+    $port = isset($args['port']) ? $args['port'] : '3306';
+    $charset = isset($args['charset']) ? $args['charset'] : 'utf8mb4';
+    $options = [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION];
+    if ($driver === 'mysql'){
+      $options[PDO::ATTR_EMULATE_PREPARES] = false;
     }
-    $i = 0;
-    $qr = [
-      'data' => [],
-      'total' => 0
-    ];
-    while($ad = $a->fetch()){
-      $qr['data'][] = $ad;
-      $i++;
-    }
-    if ($i > 0){
-      $qr['total'] = $i;
-    }
-    return $qr;
+    return new PDO(
+      $driver . ':host=' . $args['host'] . ';dbname=' . $args['name'] . ';port=' . $port . ';charset=' . $charset,
+      $args['user'],
+      $args['password'],
+      $options
+    );
   }
 
-  public static function get($table, $where, $args = false){
-    return db::find($table, $where, $args);
+  private static function connection(){
+    if (!isset($GLOBALS['database']) || !($GLOBALS['database'] instanceof PDO)){
+      throw new LogicException('Assign a PDO connection to $GLOBALS[\'database\'] before querying.');
+    }
+    $connection = $GLOBALS['database'];
+    // Also enforce exception mode for connections supplied by the caller.
+    $connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    return $connection;
   }
 
-  public static function fetch($table, $where, $args = false){
-    return db::find($table, $where, $args);
+  // Positional parameters are zero-based lists. Named keys can include a colon.
+  private static function parameters(array $params){
+    $normalized = [];
+    $named = null;
+    foreach ($params as $key => $value){
+      $isNamed = is_string($key);
+      if ($named !== null && $named !== $isNamed){
+        throw new InvalidArgumentException('Do not mix positional and named parameters.');
+      }
+      $named = $isNamed;
+      if ($isNamed){
+        $key = ltrim($key, ':');
+        if ($key === '' || array_key_exists($key, $normalized)){
+          throw new InvalidArgumentException('Named parameter keys must be nonempty and unique.');
+        }
+      }elseif ($key !== count($normalized)){
+        throw new InvalidArgumentException('Positional parameters must be a zero-based list.');
+      }
+      if ($value !== null && !is_scalar($value)){
+        throw new InvalidArgumentException('Parameter values must be scalar or null.');
+      }
+      $normalized[$key] = $value;
+    }
+    return $normalized;
   }
 
-  // sanitize parameters and insert array of data into mysql, returning the id of the record created
-  public static function insert($table, $input){
-    $columns = '';
-    $placeholders = '';
-    $total = count($input);
-    $i = 1;
-    $data = [];
-    foreach ($input as $key => $val){
-      $columns .= $key;
-      $placeholders .= ':' . $key;
-      if ($val != NULL){
-        $data[$key] = $val;
-      }else{
-        $data[$key] = NULL;
+  private static function execute($sql, array $params){
+    $params = self::parameters($params);
+    $statement = self::connection()->prepare($sql);
+    foreach ($params as $key => $value){
+      $type = PDO::PARAM_STR;
+      if ($value === null){
+        $type = PDO::PARAM_NULL;
+      }elseif (is_bool($value)){
+        $type = PDO::PARAM_BOOL;
+      }elseif (is_int($value)){
+        $type = PDO::PARAM_INT;
       }
-      if ($total != $i){
-        $columns .= ", ";
-        $placeholders .= ", ";
-      }
-      $i++;
+      $statement->bindValue(is_int($key) ? $key + 1 : ':' . $key, $value, $type);
     }
-    try {
-      $a = $GLOBALS['database']->prepare("INSERT INTO $table ($columns) value ($placeholders)");
-      $a->execute($data);
-    }
-    catch(\PDOException $e) {
-      echo $e->getMessage();
-    }
-    $o = $GLOBALS['database']->lastInsertId();
-    return $o;
+    $statement->execute();
+    return $statement;
   }
 
-  // sanitize parameters and update a mysql record
-  public static function update($table, $input, $where){
-    $query = '';
-    $total = count($input);
-    $i = 1;
-    $data = [];
-    foreach ($input as $key => $val){
-      $query .= $key . ' = ?';
-      if ($val != NULL){
-        $data[] = $val;
-      }else{
-        $data[] = NULL;
+  // SQL fragments and identifiers must come from trusted application code.
+  public static function find($table, $where, array $params = [], array $options = []){
+    $query = !empty($options['raw']) ? $where : "SELECT * FROM $table WHERE $where";
+    $data = self::execute($query, $params)->fetchAll(PDO::FETCH_ASSOC);
+    return ['data' => $data, 'total' => count($data)];
+  }
+
+  public static function get($table, $where, array $params = [], array $options = []){
+    return self::find($table, $where, $params, $options);
+  }
+
+  public static function fetch($table, $where, array $params = [], array $options = []){
+    return self::find($table, $where, $params, $options);
+  }
+
+  // Bind values without converting zero, false, or empty strings to null.
+  public static function insert($table, array $input){
+    if (!$input){
+      throw new InvalidArgumentException('Insert values must not be empty.');
+    }
+    $columns = implode(', ', array_keys($input));
+    $placeholders = implode(', ', array_fill(0, count($input), '?'));
+    self::execute("INSERT INTO $table ($columns) VALUES ($placeholders)", array_values($input));
+    return self::connection()->lastInsertId();
+  }
+
+  public static function update($table, array $input, $where, array $params = []){
+    if (!$input){
+      throw new InvalidArgumentException('Update values must not be empty.');
+    }
+    $params = self::parameters($params);
+    $named = $params && is_string(key($params));
+    $assignments = [];
+    if ($named){
+      $index = 0;
+      foreach ($input as $column => $value){
+        // Avoid both supplied keys and placeholders in the developer's SQL.
+        do {
+          $name = '__dbkit_set_' . $index++;
+        }while (array_key_exists($name, $params) || strpos($where, ':' . $name) !== false);
+        $assignments[] = "$column = :$name";
+        $params[$name] = $value;
       }
-      if ($total != $i){
-        $query .= ", ";
+    }else{
+      foreach ($input as $column => $value){
+        $assignments[] = "$column = ?";
       }
-      $i++;
+      $params = array_merge(array_values($input), $params);
     }
-    $wd = db::create_placeholders($where);
-    foreach ($wd['data'] as $dw){
-      $data[] = $dw;
-    }
-    try {
-      $a = $GLOBALS['database']->prepare("UPDATE $table SET $query WHERE " . $wd['where']);
-      $a->execute($data);
-    }
-    catch(\PDOException $e) {
-      echo $e->getMessage();
-    }
+    $set = implode(', ', $assignments);
+    self::execute("UPDATE $table SET $set WHERE $where", $params);
     return true;
   }
 
-  // sanitize parameters and delete a given mysql record
-  public static function delete($table, $where){
-    $wd = db::create_placeholders($where);
-    try {
-      $a = $GLOBALS['database']->prepare("DELETE FROM $table WHERE " . $wd['where']);
-      $a->execute($wd['data']);
-    }
-    catch(\PDOException $e) {
-      echo $e->getMessage();
-    }
+  public static function delete($table, $where, array $params = []){
+    self::execute("DELETE FROM $table WHERE $where", $params);
     return true;
   }
-
 }
-
-?>

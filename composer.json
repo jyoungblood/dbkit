@@ -11,6 +11,9 @@
 		}
 	],
 	"keywords": ["utilities", "abstraction", "database", "PDO", "mysql"],
+	"scripts": {
+		"test": "php tests/regression.php"
+	},
 	"autoload": {
 		"psr-4": {
 			"VPHP\\": ["src/"]
