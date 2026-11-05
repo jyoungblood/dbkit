@@ -48,30 +48,50 @@ class db {
     return $connection;
   }
 
-  // Positional parameters are zero-based lists. Named keys can include a colon.
+  // Values stay separate from SQL until PDO binds them.
   private static function parameters(array $params){
-    $normalized = [];
-    $named = null;
-    foreach ($params as $key => $value){
-      $isNamed = is_string($key);
-      if ($named !== null && $named !== $isNamed){
-        throw new InvalidArgumentException('Do not mix positional and named parameters.');
-      }
-      $named = $isNamed;
-      if ($isNamed){
-        $key = ltrim($key, ':');
-        if ($key === '' || array_key_exists($key, $normalized)){
-          throw new InvalidArgumentException('Named parameter keys must be nonempty and unique.');
-        }
-      }elseif ($key !== count($normalized)){
-        throw new InvalidArgumentException('Positional parameters must be a zero-based list.');
-      }
+    foreach ($params as $value){
       if ($value !== null && !is_scalar($value)){
         throw new InvalidArgumentException('Parameter values must be scalar or null.');
       }
-      $normalized[$key] = $value;
     }
-    return $normalized;
+    return $params;
+  }
+
+  private static function criteria($criteria, $raw = false){
+    if (is_string($criteria)){
+      if (trim($criteria) === ''){
+        throw new InvalidArgumentException('Criteria must not be empty.');
+      }
+      return [$criteria, []];
+    }
+    if (!is_array($criteria) || !$criteria){
+      throw new InvalidArgumentException('Criteria must be SQL, a column/value map, or [SQL, ...values].');
+    }
+    if (array_keys($criteria) === range(0, count($criteria) - 1)){
+      $sql = array_shift($criteria);
+      if (!is_string($sql) || trim($sql) === ''){
+        throw new InvalidArgumentException('The first tuple item must be SQL.');
+      }
+      return [$sql, self::parameters($criteria)];
+    }
+    if ($raw){
+      throw new InvalidArgumentException('Raw queries require SQL or [SQL, ...values].');
+    }
+    $conditions = [];
+    $params = [];
+    foreach ($criteria as $column => $value){
+      if (!is_string($column) || trim($column) === ''){
+        throw new InvalidArgumentException('Criteria maps require nonempty column names.');
+      }
+      if ($value === null){
+        $conditions[] = "$column IS NULL";
+      }else{
+        $conditions[] = "$column = ?";
+        $params[] = $value;
+      }
+    }
+    return [implode(' AND ', $conditions), self::parameters($params)];
   }
 
   private static function execute($sql, array $params){
@@ -86,25 +106,33 @@ class db {
       }elseif (is_int($value)){
         $type = PDO::PARAM_INT;
       }
-      $statement->bindValue(is_int($key) ? $key + 1 : ':' . $key, $value, $type);
+      $statement->bindValue($key + 1, $value, $type);
     }
     $statement->execute();
     return $statement;
   }
 
   // SQL fragments and identifiers must come from trusted application code.
-  public static function find($table, $where, array $params = [], array $options = []){
-    $query = !empty($options['raw']) ? $where : "SELECT * FROM $table WHERE $where";
+  public static function find($table, $criteria, $options = []){
+    if ($options === false){
+      $options = [];
+    }
+    if (!is_array($options)){
+      throw new InvalidArgumentException('Options must be an array or false.');
+    }
+    $raw = !empty($options['raw']);
+    [$where, $params] = self::criteria($criteria, $raw);
+    $query = $raw ? $where : "SELECT * FROM $table WHERE $where";
     $data = self::execute($query, $params)->fetchAll(PDO::FETCH_ASSOC);
     return ['data' => $data, 'total' => count($data)];
   }
 
-  public static function get($table, $where, array $params = [], array $options = []){
-    return self::find($table, $where, $params, $options);
+  public static function get($table, $criteria, $options = []){
+    return self::find($table, $criteria, $options);
   }
 
-  public static function fetch($table, $where, array $params = [], array $options = []){
-    return self::find($table, $where, $params, $options);
+  public static function fetch($table, $criteria, $options = []){
+    return self::find($table, $criteria, $options);
   }
 
   // Bind values without converting zero, false, or empty strings to null.
@@ -118,35 +146,23 @@ class db {
     return self::connection()->lastInsertId();
   }
 
-  public static function update($table, array $input, $where, array $params = []){
+  public static function update($table, array $input, $criteria){
     if (!$input){
       throw new InvalidArgumentException('Update values must not be empty.');
     }
-    $params = self::parameters($params);
-    $named = $params && is_string(key($params));
+    [$where, $params] = self::criteria($criteria);
     $assignments = [];
-    if ($named){
-      $index = 0;
-      foreach ($input as $column => $value){
-        // Avoid both supplied keys and placeholders in the developer's SQL.
-        do {
-          $name = '__dbkit_set_' . $index++;
-        }while (array_key_exists($name, $params) || strpos($where, ':' . $name) !== false);
-        $assignments[] = "$column = :$name";
-        $params[$name] = $value;
-      }
-    }else{
-      foreach ($input as $column => $value){
-        $assignments[] = "$column = ?";
-      }
-      $params = array_merge(array_values($input), $params);
+    foreach ($input as $column => $value){
+      $assignments[] = "$column = ?";
     }
+    $params = array_merge(array_values($input), $params);
     $set = implode(', ', $assignments);
     self::execute("UPDATE $table SET $set WHERE $where", $params);
     return true;
   }
 
-  public static function delete($table, $where, array $params = []){
+  public static function delete($table, $criteria){
+    [$where, $params] = self::criteria($criteria);
     self::execute("DELETE FROM $table WHERE $where", $params);
     return true;
   }

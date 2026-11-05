@@ -1,23 +1,9 @@
 [<img src="https://raw.githubusercontent.com/jyoungblood/vphp.dev/refs/heads/master/public/vphp-logo-100.png">](https://vphp.dev)
 # DB Kit
 
-PHP functions for database connections and CRUD operations with PDO.
+Small PHP functions for database connections and CRUD operations with PDO.
 
-## Breaking changes in 2.0.0
-
-**Migrate callers before you upgrade to 2.0.0.**
-
-- `find()`, `get()`, and `fetch()` now take parameters as their third argument and options as their fourth argument.
-- `update()` and `delete()` now take WHERE parameters separately from SQL and update values.
-- `create_placeholders()` is removed. There is no regex extraction or compatibility fallback.
-- SQL strings run as written. Legacy interpolated calls do **not** become safe automatically.
-- Connection and query failures throw exceptions. DBKit no longer prints database errors or returns success after failure.
-- `init()` throws for missing required settings instead of returning `false` for a missing host.
-- Insert and update values retain `0`, `'0'`, `false`, and `''`. These values no longer become `NULL`.
-- Parameter arrays must contain scalar values or `null`. Empty insert/update arrays are rejected.
-- `raw` now requires a truthy value. `['raw' => false]` uses the standard SELECT query.
-
-See [Migration](#migration) for before/after examples of every affected method.
+Version 2.0.0 was revised on November 4, 2026 to use the simpler criteria API documented here. If you installed the initial 2.0.0, see [migration from the initial 2.0.0](#from-the-initial-200-release).
 
 ## Installation
 
@@ -30,26 +16,7 @@ use VPHP\db;
 require __DIR__ . '/vendor/autoload.php';
 ```
 
-## Binding rules
-
-Keep SQL and parameter values separate. Do not interpolate user input into SQL or quote placeholders.
-
-- Positional parameters use `?` and a zero-based list, such as `[$hash, $id]`.
-- Named parameters use `:name` and an associative array, such as `['hash' => $hash]`. Keys can also include the colon.
-- Use one parameter style per query. Use a distinct named placeholder for each occurrence for portability across PDO drivers.
-- Integers, booleans, and nulls use their matching PDO parameter types. Strings use `PDO::PARAM_STR`.
-- Floats use `PDO::PARAM_STR` because PDO has no float parameter type. The database applies its column conversion rules.
-- An array cannot bind to one placeholder. For an `IN` list, generate one placeholder per value and pass each value separately.
-
-Placeholders protect **values only**. Table names, column names, WHERE clauses, ordering, and raw SQL remain developer-controlled.
-For user-selected identifiers or SQL fragments, choose from a fixed allowlist in application code.
-SQL `NULL` comparisons follow database rules. Use `IS NULL` to select null values, rather than `= ?` with a null parameter.
-
-## API
-
-### `db::init($settings)`
-
-Returns a PDO connection. Assign it to `$GLOBALS['database']` before you call other methods.
+## Connect
 
 ```php
 $GLOBALS['database'] = db::init([
@@ -57,236 +24,184 @@ $GLOBALS['database'] = db::init([
   'name' => 'database_name',
   'user' => 'username',
   'password' => 'password',
-  'driver' => 'mysql', // default
-  'port' => '3306', // default
-  'charset' => 'utf8mb4', // default
+  'driver' => 'mysql',    // optional
+  'port' => '3306',       // optional
+  'charset' => 'utf8mb4', // optional
 ]);
 ```
 
-The connection uses `PDO::ERRMODE_EXCEPTION`. MySQL connections from `init()` also use native prepared statements.
-The DSN format targets MySQL. For other drivers, create a PDO connection directly and assign it to `$GLOBALS['database']`.
-DBKit also sets exception mode before queries on caller-supplied PDO connections.
+Returns a PDO connection. `host`, `name`, `user`, and `password` are required and cannot be null.
+The DSN targets MySQL and uses native prepared statements. For other drivers, assign your own PDO connection to `$GLOBALS['database']`.
+DBKit uses exception mode, including on caller-supplied connections.
 
-Required settings are `host`, `name`, `user`, and `password`. Missing or null settings throw `InvalidArgumentException`.
-Connection failures propagate the original `PDOException`.
+## Criteria
 
-### Read methods
+Read, update, and delete methods accept the same three forms:
 
 ```php
-db::find($table, $where, $params = [], $options = []);
-db::get($table, $where, $params = [], $options = []);
-db::fetch($table, $where, $params = [], $options = []);
+// Column/value map: bound equality checks joined with AND.
+['hash' => $hash, 'enabled' => true]
+
+// Null values become IS NULL.
+['deleted_at' => null]
+
+// SQL tuple: SQL first, then one value per ? placeholder.
+['visits > ? ORDER BY title LIMIT ?', $minimum, 8]
+
+// Plain SQL: trusted application code, executed as written.
+"classification = 'planet' ORDER BY title LIMIT 8"
 ```
 
-All three methods behave identically. The standard query is `SELECT * FROM $table WHERE $where`.
-The `$params` and `$options` arguments must be arrays.
+Map values and tuple values are bound through PDO. Pass values without SQL escaping or extra quotes.
+Do not interpolate user input into SQL strings or quote `?` placeholders. DBKit does not extract values from SQL.
+
+Table names, column names (including map keys), and SQL fragments must come from trusted application code.
+Use an allowlist for user-selected identifiers or ordering. Placeholders protect values only.
+
+Empty criteria arrays and blank SQL are rejected. Use an explicit `'1 = 1'` when you intend to match every row.
+Maps support equality and null checks; use a tuple for other operators, `OR`, sorting, or limits.
+Tuples are zero-based lists with scalar or null values, and use positional `?` placeholders.
+For `IN` queries, provide one placeholder per value: `['id IN (?, ?)', $firstId, $secondId]`.
+In SQL tuples, use `IS NULL` for null comparisons rather than `= ?` with a null value.
+
+## Read
 
 ```php
-// Standard query
-$result = db::find('urls', 'hash = ?', [$hash]);
+$result = db::find('urls', ['hash' => $hash]);
 
-// Named parameter
-$result = db::find('urls', 'hash = :hash', ['hash' => $hash]);
-
-// Raw query
-$result = db::find('', 'SELECT * FROM urls WHERE hash = ?', [$hash], [
-  'raw' => true
+$result = db::find('celestial_bodies', [
+  'classification = ? ORDER BY title LIMIT ?', 'planet', 8,
 ]);
 
-// Aliases accept the same parameters and options.
-$result = db::get('urls', 'hash = ?', [$hash]);
-$result = db::fetch('urls', 'hash = :hash', ['hash' => $hash]);
-
-// SQL fragments stay in trusted application code.
-$planets = db::find('celestial_bodies', 'classification = ? ORDER BY name ASC LIMIT 8', ['planet']);
+foreach ($result['data'] as $row) {
+  echo $row['title'];
+}
+echo $result['total'];
 ```
 
-`['raw' => true]` runs `$where` as the complete query and ignores `$table`. Named parameters also work with raw queries.
-The only supported option is `raw`. Use raw SELECT queries when you need custom projections, joins, or aggregates.
+`db::get()` and `db::fetch()` are identical aliases. All three use `($table, $criteria, $options = [])`.
+The standard query is `SELECT * FROM $table WHERE ...`.
 
-Each method returns `['data' => $rows, 'total' => count($rows)]`. Each row is an associative array.
-Successful empty queries return `['data' => [], 'total' => 0]`.
-`total` counts returned rows, not rows before a SQL `LIMIT`.
-Query or fetch failures throw. These methods do not return partial results after failure.
+Returns `['data' => $rows, 'total' => count($rows)]`, with associative rows.
+No matches returns `['data' => [], 'total' => 0]`. `total` counts returned rows after any SQL limit.
 
-### `db::insert($table, $input)`
+### Raw queries
 
-Inserts an associative array of column names and values. Column names must come from trusted application code.
-Every value uses a bound parameter. `$input` must be a nonempty array.
+Options stay in the third argument. `raw` is the only supported option.
 
 ```php
-$newId = db::insert('urls', [
+$result = db::find('', ['SELECT title FROM urls WHERE hash = ?', $hash], [
+  'raw' => true,
+]);
+
+$result = db::get('', 'SELECT COUNT(*) AS total FROM urls', ['raw' => true]);
+```
+
+A truthy `raw` runs the criteria as the complete SQL query and ignores `$table`.
+Use a SQL string or tuple for raw queries; column/value maps are not supported.
+`['raw' => false]` uses the standard SELECT query. Legacy `false` options are also accepted.
+
+## Insert
+
+```php
+$id = db::insert('urls', [
   'hash' => $hash,
   'title' => $title,
-  'visit_count' => 0,
-  'comment' => null,
+  'visits' => 0,
+  'deleted_at' => null,
 ]);
 ```
 
-Returns PDO's `lastInsertId()` result after a successful insert. This is normally a string.
-ID behavior depends on the database driver and schema. DBKit does not promise an ID for tables without generated IDs.
-Failures throw before DBKit retrieves an ID. Empty input throws `InvalidArgumentException`.
+Every value is bound. Input must be a nonempty associative array of trusted column names and values.
+Returns PDO's `lastInsertId()` after success, normally a string. ID behavior depends on the driver and schema.
 
-### `db::update($table, $input, $where, $params = [])`
-
-`$input` contains column names and new values. `$params` contains only WHERE parameter values.
-Both arguments must be arrays. `$input` must be nonempty. There is no options argument for update.
+## Update
 
 ```php
-db::update('urls', ['title' => $title], 'hash = ?', [$hash]);
+db::update('urls', ['title' => $title], ['hash' => $hash]);
 
-db::update('urls', ['hash' => $newHash], 'hash = :hash', ['hash' => $oldHash]);
+db::update('urls', ['enabled' => false], ['visits < ?', $minimum]);
 ```
 
-DBKit binds SET values separately from WHERE values. Generated named placeholders avoid collisions with WHERE parameter names.
-For positional parameters, DBKit places SET values before WHERE values internally.
+Uses `($table, $input, $criteria)`. Input must be nonempty. Update and criteria values are bound separately.
+Returns `true` after successful execution, including unchanged values or zero matching rows.
 
-Returns `true` after successful execution, including zero matching rows or unchanged values.
-This return value confirms execution, not a changed row count. Failures throw. Empty input throws `InvalidArgumentException`.
-
-### `db::delete($table, $where, $params = [])`
-
-`$params` is an array of WHERE parameter values. There is no options argument for delete.
+## Delete
 
 ```php
-db::delete('urls', 'hash = ?', [$hash]);
-db::delete('urls', 'hash = :hash', ['hash' => $hash]);
+db::delete('urls', ['hash' => $hash]);
+
+db::delete('urls', ['visits < ? AND enabled = ?', $minimum, false]);
 ```
 
-Returns `true` after successful execution, including zero matching rows. Failures throw.
+Uses `($table, $criteria)`. Returns `true` after successful execution, including zero matching rows.
 
-## Errors
+## Values and errors
 
-DBKit produces no direct error output, HTTP response, or application log entry.
-PDO exceptions propagate unchanged. DBKit does not catch them or continue the failed operation.
-The calling application decides where to catch exceptions, what to log, and what to show users.
+Integers, booleans, and nulls use their matching PDO parameter types. Strings and floats use `PDO::PARAM_STR`
+(PDO has no float parameter type). The database applies its column conversion rules.
+Zero, `'0'`, `false`, and empty strings remain values; use explicit `null` for SQL NULL.
+Arrays, objects, and resources cannot be bound as individual values.
 
-Invalid parameter arrays, unsupported value types, and empty insert/update input throw `InvalidArgumentException`.
-Missing or invalid global PDO connections throw `LogicException`.
-Non-array arguments for array parameters produce PHP type errors.
-Successful queries with zero results or zero affected rows are not failures.
+Connection and query failures throw exceptions without printing errors or returning success after failure.
+Invalid criteria, unsupported values, empty insert/update input, and missing connection settings throw `InvalidArgumentException`.
+A missing or invalid global PDO connection throws `LogicException`.
+The calling application decides how to catch, log, and display errors.
 
-## Migration
+## Migration to 2.0
 
-### `find()`, `get()`, and `fetch()`
+### From 1.x
 
-Replace interpolated values with placeholders. Move values into the third argument.
+The original method names, argument positions, and successful return values remain.
+Trusted SQL strings still work. Replace interpolated values with maps or tuples:
 
 ```php
-// Before: unsafe legacy calls. Do not copy into new code.
+// Before: unsafe interpolation.
 $result = db::find('urls', "hash = '$hash'");
-$result = db::get('urls', "hash = '$hash'");
-$result = db::fetch('urls', "hash = '$hash'");
 
-// After
-$result = db::find('urls', 'hash = ?', [$hash]);
-$result = db::get('urls', 'hash = ?', [$hash]);
-$result = db::fetch('urls', 'hash = :hash', ['hash' => $hash]);
-```
+// After: automatically bound.
+$result = db::find('urls', ['hash' => $hash]);
 
-Move old third-argument options to the **fourth argument**. Use `[]` for parameters when the SQL needs no values.
-This change applies to all three read methods.
-
-```php
-// Before: unsafe legacy raw query.
-$result = db::find('', "SELECT * FROM urls WHERE hash = '$hash'", ['raw' => true]);
-
-// After
-$result = db::find('', 'SELECT * FROM urls WHERE hash = ?', [$hash], ['raw' => true]);
-
-// Before: raw query without parameters.
-$result = db::get('', 'SELECT * FROM urls', ['raw' => true]);
-
-// After: the empty parameter array is required before options.
-$result = db::get('', 'SELECT * FROM urls', [], ['raw' => true]);
-$result = db::fetch('', 'SELECT * FROM urls', [], ['raw' => true]);
-```
-
-Remove old `false` arguments for options, or replace them with arrays in the correct positions.
-
-### `update()` and `delete()`
-
-Keep update values in `$input`. Pass WHERE values in their own parameter array.
-
-```php
-// Before: unsafe legacy predicates.
-db::update('urls', ['hash' => $newHash], "hash = '$oldHash'");
+// Before: unsafe interpolation.
+db::update('urls', ['title' => $title], "hash = '$hash'");
 db::delete('urls', "hash = '$hash'");
 
-// After
-db::update('urls', ['hash' => $newHash], 'hash = :hash', ['hash' => $oldHash]);
+// After.
+db::update('urls', ['title' => $title], ['hash' => $hash]);
+db::delete('urls', ['hash' => $hash]);
+```
+
+`create_placeholders()` is removed; there is no regex extraction or automatic sanitization of interpolated SQL.
+`init()` and failed queries now throw instead of returning false or printing errors. Zero, false, and empty strings no longer become null.
+The `raw` option now requires a truthy value.
+
+### From the initial 2.0.0 release
+
+The separate-parameters API from the initial 2.0.0 is no longer supported. Move SQL and values into one tuple, or use a column/value map. Move read options back to argument three. These changes also apply to `get()` and `fetch()`.
+
+```php
+// Earlier API.
+$result = db::find('', 'SELECT title FROM urls WHERE hash = ?', [$hash], ['raw' => true]);
+
+// Current API.
+$result = db::find('', ['SELECT title FROM urls WHERE hash = ?', $hash], ['raw' => true]);
+
+// Earlier API.
+$result = db::find('urls', 'hash = :hash', ['hash' => $hash]);
+db::update('urls', ['title' => $title], 'hash = ?', [$hash]);
 db::delete('urls', 'hash = ?', [$hash]);
+
+// Current API.
+$result = db::find('urls', ['hash' => $hash]);
+db::update('urls', ['title' => $title], ['hash' => $hash]);
+db::delete('urls', ['hash' => $hash]);
 ```
 
-The successful return value remains `true`. Failed writes now throw instead of printing errors and returning `true`.
+Replace named bindings with maps or positional tuples. `init()`, `insert()`, and successful return shapes are unchanged from the initial 2.0.0.
 
-### `insert()`
-
-The signature stays the same. Pass values without SQL escaping or added SQL quotes.
-
-```php
-// Before and after: values are already separate from SQL.
-$id = db::insert('urls', ['hash' => $hash, 'visit_count' => 0, 'comment' => null]);
-```
-
-Zero, false, and empty-string values now remain values. Use explicit `null` where your schema needs SQL `NULL`.
-Failed inserts now throw instead of printing errors and returning a stale ID.
-
-### `init()` and error handling
-
-The successful connection assignment stays the same. Replace failure checks with application-level exception handling.
-
-```php
-// Before: false checks do not handle the new throwing behavior.
-$connection = db::init($settings);
-if (!$connection) {
-  // Application failure path.
-}
-
-// After: use the application's error boundary.
-try {
-  $GLOBALS['database'] = db::init($settings);
-  $result = db::find('urls', 'hash = ?', [$hash]);
-} catch (\PDOException | \InvalidArgumentException $error) {
-  // The application decides how to log and present the failure.
-  // Rethrow here if an outer application boundary handles it.
-  throw $error;
-}
-```
-
-Apply the same error boundary to insert, update, delete, and raw queries.
-Do not rely on printed errors, `false`, or a success value after a failed operation.
-
-### `create_placeholders()`
-
-Remove calls to this method. There is no replacement that parses already-built SQL safely.
-
-```php
-// Before: unsafe SQL construction and removed helper.
-$parts = db::create_placeholders("hash = '$hash'");
-$statement = $GLOBALS['database']->prepare('SELECT * FROM urls WHERE ' . $parts['where']);
-$statement->execute($parts['data']);
-
-// After: values remain separate from SQL from the start.
-$statement = $GLOBALS['database']->prepare('SELECT * FROM urls WHERE hash = ?');
-$statement->execute([$hash]);
-```
+Because this revision replaces the existing `2.0.0` tag, a Composer lockfile may still reference the initial release's commit. Update the dependency and verify that its locked source/dist reference matches the current `2.0.0` tag; checking the version number alone is insufficient.
 
 ## Direct PDO access
 
-`$GLOBALS['database']` is a PDO object. Native PDO methods remain available for transactions and driver-specific operations.
-Use prepared statements and separate parameter values for direct queries too.
-
-## Tests
-
-The regression suite needs PHP with PDO and `pdo_sqlite`. It creates a fresh in-memory database for each test.
-It does not access application databases or need Composer dependencies.
-
-```sh
-php tests/regression.php
-# Or:
-composer test
-```
-
-Tests cover injection strings, value types, aliases, raw SQL, named-binding collisions, exceptions without output, and successful empty operations.
-The local suite uses SQLite. It does not replace integration tests against your production database driver.
+`$GLOBALS['database']` is a PDO object. Use it directly for transactions or driver-specific operations.
+Keep SQL and parameter values separate in direct PDO queries too.
