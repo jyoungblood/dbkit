@@ -2,7 +2,7 @@
 
 /**
  * @package    VPHP - DB Kit
- * @version    2.0.0
+ * @version    2.0.1
  * @author     Jonathan Youngblood <jy@hxgf.io>
  * @license    https://github.com/jyoungblood/dbkit/blob/master/LICENSE.md (MIT License)
  * @source     https://github.com/jyoungblood/dbkit

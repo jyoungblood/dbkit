@@ -3,7 +3,7 @@
 
 Small PHP functions for database connections and CRUD operations with PDO.
 
-Version 2.0.0 was revised on November 4, 2026 to use the simpler criteria API documented here. If you installed the initial 2.0.0, see [migration from the initial 2.0.0](#from-the-initial-200-release).
+**2.0.1 changes the criteria API from 2.0.0.** This README documents 2.0.1; existing 2.0.0 callers must follow the [migration guide](#from-200).
 
 ## Installation
 
@@ -148,7 +148,7 @@ Invalid criteria, unsupported values, empty insert/update input, and missing con
 A missing or invalid global PDO connection throws `LogicException`.
 The calling application decides how to catch, log, and display errors.
 
-## Migration to 2.0
+## Migration to 2.0.1
 
 ### From 1.x
 
@@ -175,9 +175,9 @@ db::delete('urls', ['hash' => $hash]);
 `init()` and failed queries now throw instead of returning false or printing errors. Zero, false, and empty strings no longer become null.
 The `raw` option now requires a truthy value.
 
-### From the initial 2.0.0 release
+### From 2.0.0
 
-The separate-parameters API from the initial 2.0.0 is no longer supported. Move SQL and values into one tuple, or use a column/value map. Move read options back to argument three. These changes also apply to `get()` and `fetch()`.
+The separate-parameters API from 2.0.0 is no longer supported. Move SQL and values into one tuple, or use a column/value map. Move read options back to argument three. These changes also apply to `get()` and `fetch()`.
 
 ```php
 // Earlier API.
@@ -197,9 +197,9 @@ db::update('urls', ['title' => $title], ['hash' => $hash]);
 db::delete('urls', ['hash' => $hash]);
 ```
 
-Replace named bindings with maps or positional tuples. `init()`, `insert()`, and successful return shapes are unchanged from the initial 2.0.0.
+Replace named bindings with maps or positional tuples. `init()`, `insert()`, and successful return shapes are unchanged from 2.0.0.
 
-Because this revision replaces the existing `2.0.0` tag, a Composer lockfile may still reference the initial release's commit. Update the dependency and verify that its locked source/dist reference matches the current `2.0.0` tag; checking the version number alone is insufficient.
+Version `2.0.0` retains its original API. After migrating callers, update your Composer constraint if pinned to `2.0.0`, then run `composer update jyoungblood/dbkit` to install `2.0.1`.
 
 ## Direct PDO access
 
